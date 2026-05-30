@@ -4,13 +4,7 @@ import type { ChatMessage } from '../types/chat.js';
 const SYSTEM_PROMPT =
   'You are a helpful assistant in a chat app. Be concise and clear.';
 
-/**
- * Groq — free cloud tier, OpenAI-compatible API.
- * No local model downloads; you only need an API key.
- * @see https://console.groq.com
- */
 const DEFAULT_BASE_URL = 'https://api.groq.com/openai/v1';
-/** Small, fast model on Groq’s free tier (good enough for chat). */
 const DEFAULT_MODEL = 'llama-3.1-8b-instant';
 
 let client: OpenAI | null = null;
@@ -35,13 +29,11 @@ function getClient(): OpenAI {
   return client;
 }
 
-/** Prepend system instructions; drop duplicate system messages from the client. */
 export function buildMessages(messages: ChatMessage[]): ChatMessage[] {
   const withoutSystem = messages.filter((m) => m.role !== 'system');
   return [{ role: 'system', content: SYSTEM_PROMPT }, ...withoutSystem];
 }
 
-/** Stream assistant text token-by-token from the cloud LLM. */
 export async function* streamChat(
   messages: ChatMessage[],
 ): AsyncGenerator<string> {
@@ -55,7 +47,7 @@ export async function* streamChat(
   });
 
   for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta?.content;
+    const delta = chunk.choices?.[0]?.delta?.content;
     if (delta) {
       yield delta;
     }

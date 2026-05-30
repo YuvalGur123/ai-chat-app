@@ -52,42 +52,37 @@ function validateMessages(
   return { ok: true, messages: parsed };
 }
 
-function writeSse(
-  res: { write: (chunk: string) => void },
-  event: string,
-  data: unknown,
-): void {
-  res.write(`event: ${event}\n`);
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
-}
-
 export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
-  app.post<{ Body: ChatRequestBody }>('/api/chat', async (request, reply) => {
+  app.post<{ Body: ChatRequestBody }>('/api/chat', (request, reply) => {
     const validated = validateMessages(request.body?.messages);
     if (!validated.ok) {
       return reply.status(400).send({ error: validated.error });
     }
 
-    reply.hijack();
     const res = reply.raw;
 
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': request.headers.origin ?? '*',
     });
 
-    try {
-      for await (const delta of streamChat(validated.messages)) {
-        writeSse(res, 'token', { delta });
+    (async () => {
+      try {
+        for await (const delta of streamChat(validated.messages)) {
+          res.write(`event: token\ndata: ${JSON.stringify({ delta })}\n\n`);
+        }
+        res.write(`event: done\ndata: {}\n\n`);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Failed to generate response';
+        res.write(`event: error\ndata: ${JSON.stringify({ message })}\n\n`);
+      } finally {
+        res.end();
       }
-      writeSse(res, 'done', {});
-      res.end();
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to generate response';
-      writeSse(res, 'error', { message });
-      res.end();
-    }
+    })();
+
+    return new Promise(() => { });
   });
 }
